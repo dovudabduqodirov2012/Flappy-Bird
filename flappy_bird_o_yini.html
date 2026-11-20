@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flappy Bird — Sakrovchi Qush</title>
+    <style>
+        /* Asosiy stillar va mobil ekranlarga moslashtirish */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #1e293b;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            touch-action: manipulation; /* Mobil qurilmalarda ikki marta bosganda yaqinlashishni oldini oladi */
+        }
+
+        /* O'yin konteyneri */
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 480px;
+            height: 100%;
+            max-height: 850px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            background: #70c5ce;
+        }
+
+        @media (min-width: 500px) {
+            #game-container {
+                height: 92vh;
+                border-radius: 20px;
+                border: 4px solid #334155;
+            }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Yuqori panel (Jonlar, Hisob, Rekord, Tangalar va Ovoz) */
+        #top-bar {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            right: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        /* Jonlar (Yuraklar) */
+        #lives-box {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 50px;
+            padding: 5px 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .heart {
+            transition: transform 0.25s ease, opacity 0.25s ease, filter 0.25s ease;
+            display: inline-block;
+        }
+
+        .heart.lost {
+            opacity: 0.25;
+            filter: grayscale(100%);
+            transform: scale(0.8);
+        }
+
+        /* O'lchagichlar (Hisob, Rekord, Tanga) */
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .hud-pill {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(4px);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 14px;
+            padding: 5px 12px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            transition: transform 0.12s ease;
+        }
+
+        .hud-pill-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #cbd5e1;
+        }
+
+        .hud-pill-val {
+            font-size: 1.15rem;
+            font-weight: 900;
+            color: #ffffff;
+        }
+
+        .hud-pill.gold .hud-pill-val {
+            color: #facc15;
+        }
+
+        .score-pop {
+            transform: scale(1.2);
+        }
+
+        #sound-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.92);
+            border: 2.5px solid #1e293b;
+            border-radius: 50px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            font-weight: 800;
+            color: #1e293b;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        #sound-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #1e293b;
+        }
+
+        /* Ekran silkinish effekti */
+        @keyframes screenShake {
+            0%, 100% { transform: translate(0, 0); }
+            20% { transform: translate(-7px, 4px); }
+            40% { transform: translate(7px, -4px); }
+            60% { transform: translate(-5px, -3px); }
+            80% { transform: translate(5px, 3px); }
+        }
+
+        .shake {
+            animation: screenShake 0.32s ease-in-out;
+        }
+
+        /* Ekran ustidagi menyular (Boshlash va O'yin tugadi) */
+        .overlay-screen {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: rgba(15, 23, 42, 0.35);
+            backdrop-filter: blur(2px);
+            z-index: 20;
+            padding: 20px;
+            text-align: center;
+            transition: opacity 0.25s ease;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .game-title {
+            font-size: 2.8rem;
+            font-weight: 900;
+            color: #facc15;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 5px 0 #854d0e, -2px -2px 0 #1e293b, 2px -2px 0 #1e293b, -2px 2px 0 #1e293b, 2px 2px 0 #1e293b;
+            margin-bottom: 10px;
+            animation: floatTitle 2s ease-in-out infinite;
+        }
+
+        @keyframes floatTitle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .subtitle {
+            color: #ffffff;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            margin-bottom: 30px;
+        }
+
+        /* Natijalar kartochkasi */
+        .scoreboard-card {
+            background: #fef3c7;
+            border: 4px solid #78350f;
+            border-radius: 20px;
+            padding: 18px 28px;
+            margin-bottom: 24px;
+            box-shadow: 0 10px 0 #78350f, 0 15px 25px rgba(0,0,0,0.4);
+            width: 88%;
+            max-width: 330px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 8px 0;
+        }
+
+        .stat-label {
+            font-size: 1.05rem;
+            font-weight: 800;
+            color: #92400e;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            font-size: 1.65rem;
+            font-weight: 900;
+            color: #1e293b;
+        }
+
+        .new-record-badge {
+            display: inline-block;
+            background: #ef4444;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 8px;
+            margin-left: 6px;
+            vertical-align: middle;
+            text-transform: uppercase;
+        }
+
+        /* Asosiy harakat tugmalari */
+        .primary-btn {
+            background: linear-gradient(180deg, #4ade80 0%, #16a34a 100%);
+            border: 4px solid #14532d;
+            border-radius: 16px;
+            color: #ffffff;
+            font-size: 1.4rem;
+            font-weight: 900;
+            padding: 16px 42px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 2px 0 #14532d;
+            box-shadow: 0 6px 0 #14532d, 0 10px 20px rgba(0,0,0,0.3);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .primary-btn:hover {
+            filter: brightness(1.05);
+        }
+
+        .primary-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #14532d;
+        }
+
+        .controls-hint {
+            margin-top: 24px;
+            background: rgba(30, 41, 59, 0.75);
+            color: #f8fafc;
+            padding: 8px 16px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- O'yin maydoni -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Yuqori panel: Jonlar, Ovoz, Hisob, Rekord va Tangalar -->
+    <div id="top-bar">
+        <div class="hud-row">
+            <div id="lives-box" title="Qolgan jonlar">
+                <span class="heart" id="heart-1">❤️</span>
+                <span class="heart" id="heart-2">❤️</span>
+                <span class="heart" id="heart-3">❤️</span>
+            </div>
+            <button id="sound-btn" aria-label="Ovozni yoqish yoki o'chirish">
+                <span id="sound-icon">🔊</span>
+                <span>Ovoz</span>
+            </button>
+        </div>
+
+        <div class="stats-bar">
+            <div class="hud-pill" id="hud-score-box">
+                <span class="hud-pill-label">Hisob:</span>
+                <span class="hud-pill-val" id="score-display">0</span>
+            </div>
+            <div class="hud-pill" id="hud-best-box">
+                <span class="hud-pill-label">🏆 Rekord:</span>
+                <span class="hud-pill-val" id="hud-best-display">0</span>
+            </div>
+            <div class="hud-pill gold" id="hud-coin-box">
+                <span class="hud-pill-label">🪙 Tanga:</span>
+                <span class="hud-pill-val" id="coin-display">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Boshlash ekrani -->
+    <div id="start-screen" class="overlay-screen">
+        <h1 class="game-title">Sakrovchi Qush</h1>
+        <p class="subtitle">3 ta jon • Tangalarni yig'ing va rekord o'rnating!</p>
+        <button id="start-btn" class="primary-btn">O'yinni boshlash</button>
+        <div class="controls-hint">
+            Sakrash uchun ekranga bosing yoki <b>SPACE</b> tugmasini bosing
+        </div>
+    </div>
+
+    <!-- O'yin tugadi ekrani -->
+    <div id="gameover-screen" class="overlay-screen hidden">
+        <h2 class="game-title" style="color: #f87171; text-shadow: 0 5px 0 #7f1d1d, -2px -2px 0 #1e293b, 2px -2px 0 #1e293b, -2px 2px 0 #1e293b, 2px 2px 0 #1e293b;">O'yin tugadi</h2>
+        
+        <div class="scoreboard-card">
+            <div class="stat-row">
+                <span class="stat-label">Hisob</span>
+                <span id="final-score" class="stat-value">0</span>
+            </div>
+            <hr style="border: 1px dashed #d97706; margin: 8px 0;">
+            <div class="stat-row">
+                <span class="stat-label">Rekord <span id="new-badge" class="new-record-badge hidden">Yangi!</span></span>
+                <span id="best-score" class="stat-value">0</span>
+            </div>
+            <hr style="border: 1px dashed #d97706; margin: 8px 0;">
+            <div class="stat-row">
+                <span class="stat-label">🪙 Tangalar</span>
+                <span id="final-coins" class="stat-value" style="color: #d97706;">0</span>
+            </div>
+        </div>
+
+        <button id="restart-btn" class="primary-btn">Qayta o'ynash</button>
+    </div>
+</div>
+
+<script>
+/**
+ * FLAPPY BIRD (SAKROVCHI QUSH) — O'zbek tilidagi veb-o'yin
+ * 3 ta jon tizimi, tanga yig'ish, hisob va rekord o'lchagichlar bilan.
+ */
+
+// DOM elementlarini olish
+const container = document.getElementById('game-container');
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const scoreDisplay = document.getElementById('score-display');
+const hudBestDisplay = document.getElementById('hud-best-display');
+const coinDisplay = document.getElementById('coin-display');
+const hudScoreBox = document.getElementById('hud-score-box');
+const hudCoinBox = document.getElementById('hud-coin-box');
+
+const heartEls = [
+    document.getElementById('heart-1'),
+    document.getElementById('heart-2'),
+    document.getElementById('heart-3')
+];
+
+const startScreen = document.getElementById('start-screen');
+const gameoverScreen = document.getElementById('gameover-screen');
+const startBtn = document.getElementById('start-btn');
+const restartBtn = document.getElementById('restart-btn');
+const soundBtn = document.getElementById('sound-btn');
+const soundIcon = document.getElementById('sound-icon');
+
+const finalScoreEl = document.getElementById('final-score');
+const bestScoreEl = document.getElementById('best-score');
+const finalCoinsEl = document.getElementById('final-coins');
+const newBadgeEl = document.getElementById('new-badge');
+
+// O'yin holatlari
+const GAME_STATE = {
+    START: 0,
+    PLAYING: 1,
+    GAMEOVER: 2
+};
+
+const MAX_LIVES = 3;
+let currentState = GAME_STATE.START;
+let score = 0;
+let coinsCollected = 0;
+let lives = MAX_LIVES;
+let bestScore = parseInt(localStorage.getItem('flappy_uz_best')) || 0;
+let isMuted = false;
+let frames = 0;
+let lastTime = 0;
+
+// Canvas o'lchamlarini moslashtirish
+let width = 0;
+let height = 0;
+const GROUND_HEIGHT = 90;
+
+function resizeCanvas() {
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    width = rect.width;
+    height = rect.height;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // Agar o'yin boshlanmagan bo'lsa, qushni markazga qo'yish
+    if (currentState === GAME_STATE.START) {
+        bird.reset();
+    }
+}
+
+// ==========================================
+// WEB AUDIO API — SINTEZ QILINGAN OVOZLAR
+// ==========================================
+class SoundEffects {
+    constructor() {
+        this.ctx = null;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                this.ctx = new AudioContext();
+            }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
+    }
+
+    playFlap() {
+        if (isMuted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.12);
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.12);
+    }
+
+    playScore() {
+        if (isMuted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(587.33, now); // D5
+        osc.frequency.setValueAtTime(880, now + 0.08); // A5
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    playCoin() {
+        if (isMuted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(987.77, now); // B5
+        osc.frequency.setValueAtTime(1318.51, now + 0.07); // E6
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+    }
+
+    playHit() {
+        if (isMuted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(90, now + 0.2);
+
+        gain.gain.setValueAtTime(0.28, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.2);
+    }
+
+    playCrash() {
+        if (isMuted) return;
+        this.init();
+        if (!this.ctx) return;
+
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+
+        const now = this.ctx.currentTime;
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(45, now + 0.28);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.28);
+    }
+}
+
+const sfx = new SoundEffects();
+
+// ==========================================
+// O'YIN OBYEKTLARI (QUSH, QUYOSH, BULUTLAR, TRUBALAR)
+// ==========================================
+
+// Qush obyekti
+const bird = {
+    x: 80,
+    y: 250,
+    radius: 17,
+    velocity: 0,
+    gravity: 0.42,
+    jumpStrength: -7.6,
+    rotation: 0,
+    wingAngle: 0,
+    invulnerableTimer: 0, // Urilgandan keyingi himoya vaqti (kadrlar hisobida)
+
+    reset() {
+        this.x = Math.min(110, width * 0.25);
+        this.y = (height - GROUND_HEIGHT) / 2;
+        this.velocity = 0;
+        this.rotation = 0;
+        this.invulnerableTimer = 0;
+    },
+
+    flap() {
+        this.velocity = this.jumpStrength;
+        sfx.playFlap();
+    },
+
+    update(dtFactor) {
+        if (this.invulnerableTimer > 0) {
+            this.invulnerableTimer = Math.max(0, this.invulnerableTimer - dtFactor);
+        }
+
+        if (currentState === GAME_STATE.START) {
+            // Boshlash ekranida mayin suzib turish animatsiyasi
+            this.y = (height - GROUND_HEIGHT) / 2 + Math.sin(frames * 0.08) * 8;
+            this.wingAngle = Math.sin(frames * 0.25) * 0.5;
+            this.rotation = 0;
+            return;
+        }
+
+        // Fizika: tortishish kuchi va tezlik
+        this.velocity += this.gravity * dtFactor;
+        this.y += this.velocity * dtFactor;
+
+        // Qanot qoqish tezligi
+        this.wingAngle = Math.sin(frames * (this.velocity < 0 ? 0.5 : 0.2)) * 0.6;
+
+        // Qushning egilish burchagi
+        if (this.velocity < 0) {
+            this.rotation = -0.45;
+        } else {
+            this.rotation += 0.045 * dtFactor;
+            if (this.rotation > Math.PI / 2.2) {
+                this.rotation = Math.PI / 2.2;
+            }
+        }
+
+        // Yuqori chegaradan chiqib ketmaslik
+        if (this.y - this.radius < 0) {
+            this.y = this.radius;
+            this.velocity = 0;
+        }
+
+        // Yerga urilishni tekshirish
+        if (this.y + this.radius >= height - GROUND_HEIGHT) {
+            this.y = height - GROUND_HEIGHT - this.radius;
+            if (currentState === GAME_STATE.PLAYING) {
+                handleBirdDamage(true);
+            }
+        }
+    },
+
+    draw() {
+        // Himoya vaqtida qush miltillab ko'rinadi
+        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer / 5) % 2 === 0) {
+            ctx.save();
+            ctx.globalAlpha = 0.45;
+            this.drawBody();
+            ctx.restore();
+            return;
+        }
+        this.drawBody();
+    },
+
+    drawBody() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation);
+
+        // Himoya qalqoni aylanasi (urilgandan keyin)
+        if (this.invulnerableTimer > 0) {
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius + 9, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+        }
+
+        // Qush tanasi (Sariq-oltin gradient)
+        const bodyGrad = ctx.createRadialGradient(-4, -5, 2, 0, 0, this.radius + 3);
+        bodyGrad.addColorStop(0, '#fef08a');
+        bodyGrad.addColorStop(0.6, '#facc15');
+        bodyGrad.addColorStop(1, '#ea580c');
+
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius + 3, this.radius, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#422006';
+        ctx.stroke();
+
+        // Qorin qismi (yorqinroq)
+        ctx.fillStyle = '#fef9c3';
+        ctx.beginPath();
+        ctx.ellipse(-2, 6, 11, 7, 0.2, 0, Math.PI);
+        ctx.fill();
+
+        // Ko'z (oq qismi)
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(8, -5, 6.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#1e293b';
+        ctx.stroke();
+
+        // Ko'z qorachig'i
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(10, -5, 2.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Ko'zdagi yaltiroq nuqta
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(11, -6.5, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Tumshuq (yuqori va pastki)
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.moveTo(13, -1);
+        ctx.lineTo(25, 3);
+        ctx.lineTo(13, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.moveTo(13, 5);
+        ctx.lineTo(22, 7);
+        ctx.lineTo(13, 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Qanot (harakatlanuvchi)
+        ctx.save();
+        ctx.translate(-4, 1);
+        ctx.rotate(this.wingAngle);
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.ellipse(-2, 2, 10, 6.5, -0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#422006';
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.restore();
+    }
+};
+
+// ==========================================
+// TANGALAR (COINS) VA ZARRALAR (PARTICLES) TIZIMI
+// ==========================================
+const coins = {
+    list: [],
+    radius: 14,
+
+    reset() {
+        this.list = [];
+    },
+
+    spawn(x, y) {
+        this.list.push({
+            x: x,
+            y: y,
+            collected: false,
+            phase: Math.random() * Math.PI * 2
+        });
+    },
+
+    update(dtFactor) {
+        if (currentState !== GAME_STATE.PLAYING) return;
+
+        for (let i = this.list.length - 1; i >= 0; i--) {
+            const c = this.list[i];
+            c.x -= pipes.speed * dtFactor;
+            c.phase += 0.1 * dtFactor;
+
+            // Qush tangani olganini tekshirish
+            const dx = bird.x - c.x;
+            const dy = bird.y - c.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (!c.collected && dist < bird.radius + this.radius + 4) {
+                c.collected = true;
+                collectCoin(c.x, c.y);
+                this.list.splice(i, 1);
+                continue;
+            }
+
+            if (c.x < -30) {
+                this.list.splice(i, 1);
+            }
+        }
+    },
+
+    draw() {
+        this.list.forEach(c => {
+            const bobY = c.y + Math.sin(c.phase) * 4;
+            const scaleX = Math.max(0.25, Math.abs(Math.cos(c.phase * 0.7)));
+
+            ctx.save();
+            ctx.translate(c.x, bobY);
+            ctx.scale(scaleX, 1);
+
+            // Tanga tashqi doirasi
+            const grad = ctx.createRadialGradient(-4, -4, 2, 0, 0, this.radius);
+            grad.addColorStop(0, '#fef08a');
+            grad.addColorStop(0.5, '#facc15');
+            grad.addColorStop(1, '#ca8a04');
+
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = '#854d0e';
+            ctx.stroke();
+
+            // Ichki halqa va belgi
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius - 4, 0, Math.PI * 2);
+            ctx.strokeStyle = '#fef9c3';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = '#854d0e';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('$', 0, 1);
+
+            ctx.restore();
+        });
+    }
+};
+
+// Tanga yig'ilganda uchqun zarralari
+const particles = [];
+
+function createSparkles(x, y, color = '#facc15') {
+    for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.3;
+        const speed = 1.8 + Math.random() * 2.8;
+        particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1.0,
+            color: color,
+            size: 3 + Math.random() * 2.5
+        });
+    }
+}
+
+function updateAndDrawParticles(dtFactor) {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx * dtFactor;
+        p.y += p.vy * dtFactor;
+        p.life -= 0.04 * dtFactor;
+
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+            continue;
+        }
+
+        ctx.save();
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// Bulutlar va orqa fon elementlari
+const clouds = [
+    { x: 50, y: 80, scale: 0.9, speed: 0.3 },
+    { x: 220, y: 140, scale: 1.2, speed: 0.45 },
+    { x: 390, y: 65, scale: 0.75, speed: 0.25 }
+];
+
+let groundScroll = 0;
+let cityScroll = 0;
+
+function drawBackground(dtFactor) {
+    // 1. Osmon gradienti
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, height - GROUND_HEIGHT);
+    skyGrad.addColorStop(0, '#38bdf8');
+    skyGrad.addColorStop(0.65, '#bae6fd');
+    skyGrad.addColorStop(1, '#e0f2fe');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, width, height - GROUND_HEIGHT);
+
+    // 2. Harakatlanuvchi bulutlar
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    clouds.forEach(cloud => {
+        if (currentState !== GAME_STATE.GAMEOVER) {
+            cloud.x -= cloud.speed * dtFactor;
+            if (cloud.x < -100) cloud.x = width + 80;
+        }
+        drawCloud(cloud.x, cloud.y, cloud.scale);
+    });
+
+    // 3. Uzoqdagi shahar silueti (Parallax effekti)
+    const groundY = height - GROUND_HEIGHT;
+    if (currentState === GAME_STATE.PLAYING) {
+        cityScroll = (cityScroll + 0.6 * dtFactor) % 240;
+    }
+
+    ctx.fillStyle = '#93c5fd';
+    for (let x = -cityScroll; x < width + 240; x += 240) {
+        ctx.fillRect(x + 10, groundY - 75, 45, 75);
+        ctx.fillRect(x + 65, groundY - 110, 55, 110);
+        ctx.fillRect(x + 130, groundY - 60, 40, 60);
+        ctx.fillRect(x + 180, groundY - 95, 50, 95);
+    }
+
+    // Yashil butalar (shahar oldida)
+    ctx.fillStyle = '#86efac';
+    for (let x = -cityScroll * 1.3; x < width + 120; x += 60) {
+        ctx.beginPath();
+        ctx.arc(x, groundY - 10, 35, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+function drawCloud(x, y, scale) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.beginPath();
+    ctx.arc(0, 0, 24, 0, Math.PI * 2);
+    ctx.arc(22, -8, 28, 0, Math.PI * 2);
+    ctx.arc(48, 0, 22, 0, Math.PI * 2);
+    ctx.arc(24, 8, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawGround(dtFactor) {
+    const groundY = height - GROUND_HEIGHT;
+    const speed = 3.1;
+
+    if (currentState !== GAME_STATE.GAMEOVER) {
+        groundScroll = (groundScroll + speed * dtFactor) % 32;
+    }
+
+    // Tuproq qismi
+    const dirtGrad = ctx.createLinearGradient(0, groundY + 18, 0, height);
+    dirtGrad.addColorStop(0, '#ded895');
+    dirtGrad.addColorStop(1, '#c2b96b');
+    ctx.fillStyle = dirtGrad;
+    ctx.fillRect(0, groundY + 18, width, GROUND_HEIGHT - 18);
+
+    // Yuqori o't qatlami
+    ctx.fillStyle = '#4ade80';
+    ctx.fillRect(0, groundY, width, 18);
+
+    // Harakatlanuvchi chiziqlar (tezlik hissini berish uchun)
+    ctx.fillStyle = '#16a34a';
+    for (let x = -groundScroll; x < width + 32; x += 32) {
+        ctx.beginPath();
+        ctx.moveTo(x, groundY);
+        ctx.lineTo(x + 16, groundY);
+        ctx.lineTo(x + 8, groundY + 18);
+        ctx.lineTo(x - 8, groundY + 18);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Yerning yuqori chegarasi
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, groundY, width, 3);
+    ctx.fillStyle = '#65a30d';
+    ctx.fillRect(0, groundY + 18, width, 3);
+}
+
+// ==========================================
+// TRUBALAR (TO'SIQLAR) TIZIMI
+// ==========================================
+const pipes = {
+    list: [],
+    width: 64,
+    gap: 142, // Qush o'tadigan oraliq
+    speed: 3.1,
+    spawnTimer: 0,
+    spawnInterval: 95, // Kadrlar soni
+
+    reset() {
+        this.list = [];
+        this.spawnTimer = 60;
+    },
+
+    spawn() {
+        const minHeight = 70;
+        const maxTopHeight = height - GROUND_HEIGHT - this.gap - minHeight;
+        const topHeight = Math.floor(Math.random() * (maxTopHeight - minHeight + 1)) + minHeight;
+        const spawnX = width + 10;
+
+        this.list.push({
+            x: spawnX,
+            topHeight: topHeight,
+            bottomY: topHeight + this.gap,
+            passed: false
+        });
+
+        // Truba oralig'ining markazida oltin tanga yaratish
+        const centerY = topHeight + this.gap / 2;
+        coins.spawn(spawnX + this.width / 2, centerY);
+
+        // Ba'zan ikki truba orasidagi yo'lda qo'shimcha tanga chiqarish
+        if (Math.random() < 0.45) {
+            const nextX = spawnX + this.width + (this.speed * this.spawnInterval) / 2;
+            const randomY = Math.max(90, Math.min(height - GROUND_HEIGHT - 90, centerY + (Math.random() * 100 - 50)));
+            coins.spawn(nextX, randomY);
+        }
+    },
+
+    update(dtFactor) {
+        if (currentState !== GAME_STATE.PLAYING) return;
+
+        this.spawnTimer += dtFactor;
+        if (this.spawnTimer >= this.spawnInterval) {
+            this.spawn();
+            this.spawnTimer = 0;
+        }
+
+        for (let i = this.list.length - 1; i >= 0; i--) {
+            const p = this.list[i];
+            p.x -= this.speed * dtFactor;
+
+            // To'qnashuvni tekshirish (agar qush himoya rejimida bo'lmasa)
+            const hitMargin = 4;
+            const birdLeft = bird.x - bird.radius + hitMargin;
+            const birdRight = bird.x + bird.radius - hitMargin;
+            const birdTop = bird.y - bird.radius + hitMargin;
+            const birdBottom = bird.y + bird.radius - hitMargin;
+
+            const pipeLeft = p.x;
+            const pipeRight = p.x + this.width;
+
+            if (bird.invulnerableTimer <= 0 && birdRight > pipeLeft && birdLeft < pipeRight) {
+                if (birdTop < p.topHeight || birdBottom > p.bottomY) {
+                    handleBirdDamage(false, p);
+                }
+            }
+
+            // Ochko qo'shish
+            if (!p.passed && p.x + this.width < bird.x) {
+                p.passed = true;
+                incrementScore(1);
+            }
+
+            // Ekrandan chiqib ketgan trubalarni o'chirish
+            if (p.x + this.width < -20) {
+                this.list.splice(i, 1);
+            }
+        }
+    },
+
+    draw() {
+        const groundY = height - GROUND_HEIGHT;
+
+        this.list.forEach(p => {
+            // Yuqori truba
+            this.drawSinglePipe(p.x, 0, this.width, p.topHeight, true);
+            // Pastki truba
+            this.drawSinglePipe(p.x, p.bottomY, this.width, groundY - p.bottomY, false);
+        });
+    },
+
+    drawSinglePipe(x, y, w, h, isTop) {
+        if (h <= 0) return;
+
+        // Truba tanasi uchun 3D yashil gradient
+        const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+        grad.addColorStop(0, '#15803d');
+        grad.addColorStop(0.25, '#4ade80');
+        grad.addColorStop(0.55, '#22c55e');
+        grad.addColorStop(1, '#14532d');
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, w, h);
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#052e16';
+        ctx.strokeRect(x, y, w, h);
+
+        // Truba qopqog'i (boshi)
+        const capHeight = 26;
+        const capOverhang = 5;
+        const capY = isTop ? y + h - capHeight : y;
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(x - capOverhang, capY, w + capOverhang * 2, capHeight);
+        ctx.strokeRect(x - capOverhang, capY, w + capOverhang * 2, capHeight);
+
+        // Yorug'lik chizig'i (highlight)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillRect(x + 8, y, 6, h);
+    }
+};
+
+// ==========================================
+// O'YIN JARAYONINI BOSHQARISH
+// ==========================================
+
+function updateLivesUI() {
+    heartEls.forEach((heart, idx) => {
+        if (idx < lives) {
+            heart.classList.remove('lost');
+        } else {
+            heart.classList.add('lost');
+        }
+    });
+}
+
+function triggerShake() {
+    container.classList.remove('shake');
+    void container.offsetWidth;
+    container.classList.add('shake');
+}
+
+function startGame() {
+    sfx.init();
+    currentState = GAME_STATE.PLAYING;
+    score = 0;
+    coinsCollected = 0;
+    lives = MAX_LIVES;
+
+    scoreDisplay.textContent = '0';
+    coinDisplay.textContent = '0';
+    hudBestDisplay.textContent = bestScore;
+    updateLivesUI();
+    
+    startScreen.classList.add('hidden');
+    gameoverScreen.classList.add('hidden');
+
+    bird.reset();
+    pipes.reset();
+    coins.reset();
+    particles.length = 0;
+    bird.flap();
+}
+
+function incrementScore(points = 1) {
+    score += points;
+    scoreDisplay.textContent = score;
+    sfx.playScore();
+
+    // Agar joriy hisob rekorddan oshsa, yuqoridagi rekordni ham darhol yangilash
+    if (score > bestScore) {
+        bestScore = score;
+        hudBestDisplay.textContent = bestScore;
+        localStorage.setItem('flappy_uz_best', bestScore);
+    }
+
+    // Ochko animatsiyasi
+    hudScoreBox.classList.remove('score-pop');
+    void hudScoreBox.offsetWidth;
+    hudScoreBox.classList.add('score-pop');
+    setTimeout(() => hudScoreBox.classList.remove('score-pop'), 150);
+}
+
+function collectCoin(x, y) {
+    coinsCollected++;
+    coinDisplay.textContent = coinsCollected;
+    sfx.playCoin();
+    createSparkles(x, y, '#facc15');
+
+    // Tanga yig'ilganda +2 qo'shimcha hisob ham qo'shiladi
+    score += 2;
+    scoreDisplay.textContent = score;
+    if (score > bestScore) {
+        bestScore = score;
+        hudBestDisplay.textContent = bestScore;
+        localStorage.setItem('flappy_uz_best', bestScore);
+    }
+
+    hudCoinBox.classList.remove('score-pop');
+    void hudCoinBox.offsetWidth;
+    hudCoinBox.classList.add('score-pop');
+    setTimeout(() => hudCoinBox.classList.remove('score-pop'), 150);
+}
+
+function handleBirdDamage(isGroundHit, hitPipe = null) {
+    if (currentState !== GAME_STATE.PLAYING || bird.invulnerableTimer > 0) return;
+
+    lives--;
+    updateLivesUI();
+    triggerShake();
+    createSparkles(bird.x, bird.y, '#ef4444');
+
+    // Uchala jon ham tugasa — O'yin tugadi
+    if (lives <= 0) {
+        triggerGameOver();
+        return;
+    }
+
+    // Hali jon qolgan bo'lsa: ovoz chiqarish, 1.8 soniya himoya berish va xavfsiz balandlikka ko'tarish
+    sfx.playHit();
+    bird.invulnerableTimer = 110; // ~1.8 soniya miltillab himoyalanish
+
+    if (isGroundHit) {
+        // Yerga urilganda yuqoriga sakratish
+        bird.y = height - GROUND_HEIGHT - bird.radius - 20;
+        bird.velocity = -8.5;
+    } else if (hitPipe) {
+        // Trubaga urilganda truba oralig'ining markaziga tekislab, yengil ko'tarish
+        const safeCenterY = hitPipe.topHeight + pipes.gap / 2;
+        bird.y = safeCenterY;
+        bird.velocity = -4.5;
+    }
+}
+
+function triggerGameOver() {
+    if (currentState === GAME_STATE.GAMEOVER) return;
+    currentState = GAME_STATE.GAMEOVER;
+    sfx.playCrash();
+
+    // Rekordni tekshirish va saqlash
+    const savedBest = parseInt(localStorage.getItem('flappy_uz_best_prev')) || 0;
+    let isNewRecord = false;
+    if (score >= bestScore && score > savedBest) {
+        isNewRecord = true;
+    }
+    localStorage.setItem('flappy_uz_best', bestScore);
+    localStorage.setItem('flappy_uz_best_prev', bestScore);
+
+    finalScoreEl.textContent = score;
+    bestScoreEl.textContent = bestScore;
+    finalCoinsEl.textContent = coinsCollected;
+
+    if (isNewRecord && score > 0) {
+        newBadgeEl.classList.remove('hidden');
+    } else {
+        newBadgeEl.classList.add('hidden');
+    }
+
+    // Kichik pauzadan so'ng natija oynasini ko'rsatish
+    setTimeout(() => {
+        gameoverScreen.classList.remove('hidden');
+    }, 350);
+}
+
+function handleJumpInput(e) {
+    // Ovoz tugmasiga bosilganda sakramaslik
+    if (e.target.closest('#sound-btn')) return;
+
+    if (currentState === GAME_STATE.PLAYING) {
+        bird.flap();
+    }
+}
+
+// ==========================================
+// ASOSIY ANIMATSIYA SIKLI (60 FPS)
+// ==========================================
+function gameLoop(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const deltaTime = timestamp - lastTime;
+    lastTime = timestamp;
+
+    // Turli chastotali ekranlarda (60Hz, 120Hz) bir xil tezlikni ta'minlash
+    const dtFactor = Math.min(deltaTime / (1000 / 60), 2.5);
+    frames += dtFactor;
+
+    ctx.clearRect(0, 0, width, height);
+
+    drawBackground(dtFactor);
+    pipes.update(dtFactor);
+    pipes.draw();
+    coins.update(dtFactor);
+    coins.draw();
+    drawGround(dtFactor);
+    bird.update(dtFactor);
+    bird.draw();
+    updateAndDrawParticles(dtFactor);
+
+    requestAnimationFrame(gameLoop);
+}
+
+// ==========================================
+// HODISALAR (EVENTS)
+// ==========================================
+
+// Tugmalar
+startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startGame();
+});
+
+restartBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startGame();
+});
+
+soundBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    isMuted = !isMuted;
+    soundIcon.textContent = isMuted ? '🔇' : '🔊';
+});
+
+// Sichqoncha va sensorli ekran boshqaruvi
+container.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button')) return;
+    handleJumpInput(e);
+});
+
+// Klaviatura boshqaruvi (Space va Yuqoriga strelka)
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        if (currentState === GAME_STATE.START) {
+            startGame();
+        } else if (currentState === GAME_STATE.PLAYING) {
+            bird.flap();
+        } else if (currentState === GAME_STATE.GAMEOVER && !gameoverScreen.classList.contains('hidden')) {
+            startGame();
+        }
+    }
+});
+
+window.addEventListener('resize', resizeCanvas);
+
+// O'yinni ishga tushirish
+window.onload = function () {
+    resizeCanvas();
+    hudBestDisplay.textContent = bestScore;
+    bestScoreEl.textContent = bestScore;
+    updateLivesUI();
+    requestAnimationFrame(gameLoop);
+};
+</script>
+</body>
+</html>
